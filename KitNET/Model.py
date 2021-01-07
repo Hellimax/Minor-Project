@@ -2,6 +2,17 @@ import numpy as np
 import KitNET.dA as AE
 import KitNET.corClust as CC
 
+import numpy as np 
+import os
+import skimage.io as io
+import skimage.transform as trans
+import numpy as np
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from keras import backend as keras
+
 class KitNET:
     #n: the number of features in your input dataset (i.e., x \in R^n)
     #m: the maximum size of any autoencoder in the ensemble layer
@@ -98,3 +109,46 @@ class KitNET:
         # construct output layer
         params = AE.dA_params(len(self.v), n_hidden=0, lr=self.lr, corruption_level=0, gracePeriod=0, hiddenRatio=self.hr)
         self.outputLayer = AE.dA(params)
+    
+    
+    #unet architecture implementation
+    def unet(pretrained_weights = None,input_size = (256,256,1)):
+        inputs = Input(input_size)
+        conv1 = Dense(64, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
+        conv1 = Dense(64, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
+        conv2 = Dense(128, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
+        conv2 = Dense(128, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv2)
+        conv3 = Dense(256, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv2)
+        conv3 = Dense(256, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv3)
+        conv4 = Dense(512, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv3)
+        conv4 = Dense(512, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv4)
+        drop4 = Dropout(0.5)(conv4)
+
+        conv5 = Dense(1024, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(drop4)
+        conv5 = Dense(1024, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv5)
+        drop5 = Dropout(0.5)(conv5)
+
+        up6 = Dense(512, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(drop5)
+        merge6 = concatenate([drop4,up6], axis = 3)
+        conv6 = Dense(512, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge6)
+        conv6 = Dense(512, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv6)
+
+        up7 = Dense(256, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv6)
+        merge7 = concatenate([conv3,up7], axis = 3)
+        conv7 = Dense(256, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge7)
+        conv7 = Dense(256, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv7)
+
+        up8 = Dense(128, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv7)
+        merge8 = concatenate([conv2,up8], axis = 3)
+        conv8 = Dense(128, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge8)
+        conv8 = Dense(128, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv8)
+
+        up9 = Dense(64, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv8)
+        merge9 = concatenate([conv1,up9], axis = 3)
+        conv9 = Dense(64, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge9)
+        conv9 = Dense(64, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
+        conv9 = Dense(2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
+        conv10 = Dense(1, activation = 'sigmoid')(conv9)
+
+        model = Model(input = inputs, output = conv10)
+        model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
